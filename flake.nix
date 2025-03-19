@@ -172,9 +172,11 @@
       shellHook = ''
         unset PYTHONPATH  # Unset PYTHONPATH
         echo "Pure DevShell"  # Display a pure dev shell message
-        echo "Repo root is: $REPO_ROOT"  # Display the repo root
         export REPO_ROOT=$(git rev-parse --show-toplevel)  # Set the repo root using Git
-        echo "test"  # Simple echo to indicate shell setup
+        echo "Repo root is: $REPO_ROOT"  # Display the repo root
+        echo "Name: ${Name}"  # Echo the package name
+        echo "Python Version: ${pythonVersion}"  # Echo the Python version
+        echo "Package Name: ${packageName}"  # Echo the formatted package name
       '';
     };
 

@@ -1,31 +1,32 @@
 #!/bin/bash
 
 # Check if the correct number of arguments are provided
-if [ $# -ne 2 ]; then
-    echo "Usage: $0 <Name> <pythonVersion>"
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <pythonVersion>"
     exit 1
 fi
 
 # Get the package name and python version from arguments
-Name=$1
-pythonVersion=$2
+pythonVersion=$1
+
+
+Name=$(basename -s .git $(git remote get-url origin) 2>/dev/null || basename "$(git rev-parse --show-toplevel)")
+echo "Using repository name: $Name"
 
 # Replace hyphens with underscores in the name
 packageName="${Name//-/_}"
 
 # Create the folder structure src/${packageName}/ inside the ${Name} directory
-mkdir -p "$Name/src/$packageName"
-
-cp ./flake.nix ./$Name/flake.nix
+mkdir -p "src/$packageName"
 
 # Create the __init__.py file with the hello function
-cat > "$Name/src/$packageName/__init__.py" <<EOF
+cat > "src/$packageName/__init__.py" <<EOF
 def hello() -> None:
-    print("Hello from hello-world!")
+    print("Hello from packageName!")
 EOF
 
 # Create the pyproject.toml file
-cat > "$Name/pyproject.toml" <<EOF
+cat > "pyproject.toml" <<EOF
 [project]
 name = "$Name"
 version = "0.1.0"

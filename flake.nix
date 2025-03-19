@@ -36,36 +36,51 @@
 
     loadTOML = file: builtins.fromTOML (builtins.readFile file);
 
-    cleanTOML = toml: {
-      name = toml.name or "hello-world";
-      version = toml.version or "1.0.0";
-      requires-python = toml.requires-python or "=3.12";
-      dependencies = toml.dependencies or [];
+    # extractNameAndPythonRequirements : File -> { name: String, requiresPython: String }
+    extractNameAndPythonRequirements = file: let
+      toml = loadTOML file;
+    in {
+      name = toml.package.name or "Unknown";  # You can adjust the default if needed
+      requiresPython = toml.tool.poetry.dependencies.python or "Not specified";  # Default if not found
+    };
+
+
+    # Clean the TOML data
+    cleanTOML = toml: lib.filterAttrs (n: v: v != null) {
+      # Extract the `name` and `version` from the [project] section
+      name = toml.project.name or null;
+      version = toml.project.version or null;
+      description = toml.project.description or null;
+      readme = toml.project.readme or null;
+      requiresPython = toml.project."requires-python" or null;
+      dependencies = toml.project.dependencies or [];
+
+      # Handle the [build-system] section (example, if you need it)
+      buildSystemRequires = toml."build-system".requires or [];
+      buildBackend = toml."build-system"."build-backend" or null;
+
+      # Handle other sections as needed
+      dependencyGroups = toml."dependency-groups".dev or [];
+
+      # Optionally handle the [project.scripts] section if needed
+      scripts = toml."project.scripts" or {};
     };
 
 
     # Load the TOML file and clean it
-    tomlData = loadTOML ./pyproject.toml;
-    cleanedData = cleanTOML tomlData;
+    tomlFile = loadTOML ./pyproject.toml;
+    result = cleanTOML tomlFile;
 
-    pythonVersionRaw = if cleanedData.requires-python != "" then
-          "python" + (nixpkgs.lib.replaceStrings [ "." "=" "<" ">" ] [ "" "" "" "" ] cleanedData.requires-python)
+    pythonVersion = if result.requiresPython != "" then
+          "python" + (nixpkgs.lib.replaceStrings [ "." "=" "<" ">" ] [ "" "" "" "" ] result.requiresPython)
         else
           "python312";  # Default if not set in .env or environment
 
-
-    #packageName = cleanedData.name;
-    packageName = "hello-world";
-
-    pythonVersion = "python312";
+    Name = result.name;
+    packageName = nixpkgs.lib.replaceStrings [" " "-"] ["_" "_"] Name;
     platform = "x86_64-linux";
     sourcePreference = "wheel";  # Change this to "sdist" if needed
     baseWorkspacePath = ./.;
-
-    # Modularized paths and package names
-    repoRoot = builtins.getEnv "REPO_ROOT";
-    repoRootExists = builtins.pathExists repoRoot;
-
 
     # Functions to load workspace and build overlays
     loadWorkspace = uv2nix.lib.workspace.loadWorkspace;
@@ -73,8 +88,8 @@
       sourcePreference = sourcePreference;
     };
 
-    virtualEnvName = "${packageName}-env";  # Derived from packageName
-    editableEnvName = "${packageName}-dev-env";  # Derived from packageName
+    virtualEnvName = "${Name}-env";  # Derived from packageName
+    editableEnvName = "${Name}-dev-env";  # Derived from packageName
 
     # Overlay and fixups
     pyprojectOverrides = _final: _prev: {
@@ -109,31 +124,29 @@
       shellHook = ''
         unset PYTHONPATH
         echo "Impure DevShell"
-        echo "Repo root is: $REPO_ROOT"
-        echo "Python Version: ${pythonVersionRaw}"
+        echo "Name: ${Name}"
+        echo "Python Version: ${pythonVersion}"
         echo "Package Name: ${packageName}"
       '';
     };
 
     createEditableDevShell = let
-      editableOverlay = if repoRootExists then
-        (loadWorkspace { workspaceRoot = baseWorkspacePath; }).mkEditablePyprojectOverlay {
-          root = repoRoot;
-        }
-      else
-        builtins.throw "REPO_ROOT directory does not exist: ${repoRoot}";  # Throw an error if it doesn't exist.
+      editableOverlay = (loadWorkspace 
+      { workspaceRoot = ./.; }).mkEditablePyprojectOverlay {
+          root = "REPO_ROOT";
+        };
 
       editablePythonSet = pythonSet.overrideScope (
         lib.composeManyExtensions [
           editableOverlay
           (final: prev: {
-            ${packageName} = prev.${packageName}.overrideAttrs (old: {
+            ${Name} = prev.${Name}.overrideAttrs (old: {
               src = lib.fileset.toSource {
                 root = old.src;
                 fileset = lib.fileset.unions [
                   (old.src + "/pyproject.toml")
                   (old.src + "/README.md")
-                  (old.src + "/src/hello_world/__init__.py")
+                  (old.src + "/src/${packageName}/__init__.py")
                 ];
               };
               nativeBuildInputs = old.nativeBuildInputs ++ final.resolveBuildSystem {
@@ -144,7 +157,7 @@
         ]
       );
 
-      virtualenv = editablePythonSet.mkVirtualEnv virtualEnvName (loadWorkspace { workspaceRoot = baseWorkspacePath; }).deps.all;
+      virtualenv = editablePythonSet.mkVirtualEnv virtualEnvName (loadWorkspace { workspaceRoot = ./.; }).deps.all;
     in pkgs.mkShell {
       packages = [ virtualenv pkgs.uv ];
       env = {
@@ -162,7 +175,7 @@
     };
 
     # Create virtual environment for app
-    virtualEnvPackage = pythonSet.mkVirtualEnv virtualEnvName (loadWorkspace { workspaceRoot = baseWorkspacePath; }).deps.default;
+    virtualEnvPackage = pythonSet.mkVirtualEnv virtualEnvName (loadWorkspace { workspaceRoot = ./.; }).deps.default;
 
   in
   {
@@ -173,7 +186,7 @@
     apps.${platform} = {
       default = {
         type = "app";
-        program = "${self.packages.${platform}.default}/bin/${packageName}";
+        program = "${self.packages.${platform}.default}/bin/hello";
       };
     };
 

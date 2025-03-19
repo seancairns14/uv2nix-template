@@ -13,6 +13,7 @@ git remote remove origin
 
 git init
 
+
 Name=$(basename "$(pwd)")
 echo "Using repository name: $Name"
 
@@ -35,7 +36,7 @@ name = "$Name"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = "^$pythonVersion"
+requires-python = ">=$pythonVersion"
 dependencies = [
     "urllib3>=2.2.3",
 ]
@@ -52,5 +53,9 @@ dev = [
     "ruff>=0.6.7",
 ]
 EOF
+
+nix run nixpkgs#uv lock
+
+git add flake.nix uv.lock README.md pyproject.toml src/$packageName/__init__.py
 
 echo "Project setup complete for package '$packageName' with Python '$pythonVersion'."

@@ -9,8 +9,11 @@ fi
 # Get the package name and python version from arguments
 pythonVersion=$1
 
+git remote remove origin
 
-Name=$(basename -s .git $(git remote get-url origin) 2>/dev/null || basename "$(git rev-parse --show-toplevel)")
+git init
+
+Name=$(basename "$(pwd)")
 echo "Using repository name: $Name"
 
 # Replace hyphens with underscores in the name

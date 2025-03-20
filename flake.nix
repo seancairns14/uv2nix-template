@@ -73,6 +73,13 @@
         else
           "python312";  # Default to python 3.12 if not specified
 
+
+    # Determine Dot Python version to use
+    pythonDotVersion = if result.requiresPython != "" then
+          "python" + (nixpkgs.lib.replaceStrings [ "=" "<" ">" ] [ "" "" "" ] result.requiresPython)
+        else
+          "python3.12";  # Default to python 3.12 if not specified
+
     Name = result.name;  # Extract package name
     packageName = nixpkgs.lib.replaceStrings [" " "-"] ["_" "_"] Name;  # Format package name with dashes
     platform = "x86_64-linux";  # Define target platform

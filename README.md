@@ -40,6 +40,8 @@ nix develop .#uv2nix --ignore-environment
 This will load a pure development shell, ensuring your environment is isolated from the host system.
 Optional: Impure Development Shell
 
+Note: I use --ignore-environment this is Optional.
+
 If you prefer to use a development shell that mirrors your host system (useful for testing or running commands that require your system's environment), you can use an impure development shell:
 ```bash
 nix develop .#impure --ignore-environment

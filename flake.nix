@@ -1,362 +1,251 @@
 {
-  description = "Hello world flake using uv2nix";  # Description of the flake project
+  description = "General-purpose Python project using uv2nix";
 
-  # Inputs are the external dependencies or sources required by the flake
+  ### --- Inputs (Dependencies) ---
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";  # The Nixpkgs repository, using unstable version
+    # Official nixpkgs set (unstable channel)
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # pyproject-nix provides support for building Python packages
+    # pyproject.nix handles builds from pyproject.toml
     pyproject-nix = {
-      url = "github:pyproject-nix/pyproject.nix";  # Reference to pyproject-nix repository
-      inputs.nixpkgs.follows = "nixpkgs";  # Ensures it follows the nixpkgs input
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # uv2nix provides integration with uv2nix for handling Python-based workspaces
+    # uv2nix extracts dependency graphs from uv lockfiles
     uv2nix = {
-      url = "github:pyproject-nix/uv2nix";  # Reference to uv2nix repository
-      inputs.pyproject-nix.follows = "pyproject-nix";  # Ensures it follows pyproject-nix
-      inputs.nixpkgs.follows = "nixpkgs";  # Ensures it follows nixpkgs
+      url = "github:pyproject-nix/uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
     };
 
-    # pyproject-build-systems provides build-system packages for Python projects
+    # Optional: overlays and default package overrides
     pyproject-build-systems = {
-      url = "github:pyproject-nix/build-system-pkgs";  # Reference to pyproject-build-systems repository
-      inputs.pyproject-nix.follows = "pyproject-nix";  # Ensures it follows pyproject-nix
-      inputs.uv2nix.follows = "uv2nix";  # Ensures it follows uv2nix
-      inputs.nixpkgs.follows = "nixpkgs";  # Ensures it follows nixpkgs
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
     };
-
-    # toml2nix converts TOML files (like pyproject.toml) to Nix
-    toml2nix = {
-      url = "github:erooke/toml2nix";  # Reference to toml2nix repository
-      inputs.nixpkgs.follows = "nixpkgs";  # Ensures it follows nixpkgs
+    # Arion for managing Docker/Podman services
+    arion = {
+      url = "github:hercules-ci/hercules-ci-agent/stable";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  # Outputs define what the flake will provide (packages, apps, devShells, etc.)
-  outputs = 
-    { self, 
-      nixpkgs, 
-      uv2nix, 
-      pyproject-nix, 
-      pyproject-build-systems, 
-      toml2nix, 
-      ... 
-    }:
+  ### --- Outputs (Main Build Logic) ---
+  outputs = { self, nixpkgs, uv2nix, pyproject-nix, pyproject-build-systems, arion, ... }:
     let
-      inherit (nixpkgs) lib;  # Import Nixpkgs library to access common Nix functions
+      inherit (nixpkgs) lib;
       forAllSystems = lib.genAttrs lib.systems.flakeExposed;
 
-      StartApp = "${packageName}:hello";
-      settingsModules = {
-        prod = "${packageName}.settings";
+      # Change this to match your project name (used throughout the flake)
+      projectName = "project-name";
+      packageName = "package-name";
+
+      # Load project dependency graph and metadata using uv2nix
+      workspace = uv2nix.lib.workspace.loadWorkspace {
+        workspaceRoot = ./.;
       };
 
-      workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
-
+      # Overlay for standard builds (non-editable)
       overlay = workspace.mkPyprojectOverlay {
-          sourcePreference = "wheel";
-        };
+        sourcePreference = "wheel"; # use wheels over sdists if possible
+      };
 
+      # Overlay for development (editable source)
       editableOverlay = workspace.mkEditablePyprojectOverlay {
-          root = "$REPO_ROOT";
-        };
-      
-      loadTOML = file: builtins.fromTOML (builtins.readFile file);
-
-      extractNameAndPythonRequirements = file: let
-        toml = loadTOML file;  # Load the TOML file
-      in {
-        name = toml.package.name or "Unknown";  # Extract package name or default to "Unknown"
-        requiresPython = toml.tool.poetry.dependencies.python or "Not specified";  # Extract Python version or default to "Not specified"
+        root = "$REPO_ROOT";
       };
 
-
-      # Clean the TOML data by removing null values and extracting useful attributes
-      cleanTOML = toml: lib.filterAttrs (n: v: v != null) {
-        name = toml.project.name or null;
-        version = toml.project.version or null;
-        description = toml.project.description or null;
-        readme = toml.project.readme or null;
-        requiresPython = toml.project."requires-python" or null;
-        dependencies = toml.project.dependencies or [];
-        buildSystemRequires = toml."build-system".requires or [];
-        buildBackend = toml."build-system"."build-backend" or null;
-        dependencyGroups = toml."dependency-groups".dev or [];
-        scripts = toml."project.scripts" or {};
-      };
-
-      # Load and clean the pyproject.toml file
-      tomlFile = loadTOML ./pyproject.toml;
-      result = cleanTOML tomlFile;
-      
-      # Determine Python version to use
-      pythonVersion = if result.requiresPython != "" then
-            "python" + (nixpkgs.lib.replaceStrings [ "." "=" "<" ">" ] [ "" "" "" "" ] result.requiresPython)
-          else
-            "python312";  # Default to python 3.12 if not specified
-
-      Name = result.name;  # Extract package name
-      packageName = nixpkgs.lib.replaceStrings [" " "-"] ["_" "_"] Name;  # Format package name with dashes
-      platform = "x86_64-linux";  # Define target platform
-      sourcePreference = "wheel";  # Prefer wheel over sdist (source distribution)
-
-      # Set names for virtual environments
-      virtualEnvName = "${Name}-env";  # Standard virtualenv name based on package
-      editableEnvName = "${Name}-dev-env";  # Editable dev environment name
-
-
-      # Python sets grouped per system
-      pythonSets = forAllSystems (
-        system:
+      # Define per-system Python dependency sets
+      pythonSets = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          inherit (pkgs) stdenv;
 
-          # Base Python package set from pyproject.nix
+          # Base build set for selected Python version
           baseSet = pkgs.callPackage pyproject-nix.build.packages {
-            python = pkgs.python312;
+            python = pkgs.python3;
           };
 
-          # An overlay of build fixups
+          # Override scope to include custom test derivations (mypy/pytest)
           pyprojectOverrides = final: prev: {
+            ${projectName} = prev.${projectName}.overrideAttrs (old: {
+              passthru = old.passthru // {
+                tests = (old.tests or { }) // {
+                  # mypy type checking
+                  mypy = final.stdenv.mkDerivation {
+                    name = "${final.${projectName}.name}-mypy";
+                    inherit (final.${projectName}) src;
+                    nativeBuildInputs = [
+                      (final.mkVirtualEnv "${projectName}-typing-env" {
+                        ${projectName} = [ "typing" ];
+                      })
+                    ];
+                    dontConfigure = true;
+                    dontInstall = true;
+                    buildPhase = ''
+                      mkdir $out
+                      mypy --strict . --junit-xml $out/junit.xml
+                    '';
+                  };
 
-          
-            ${Name} = prev.${Name}.overrideAttrs (old: {
-
-              # Remove tests from passthru
-              passthru = old.passthru // { };
+                  # pytest + code coverage
+                  pytest = final.stdenv.mkDerivation {
+                    name = "${final.${projectName}.name}-pytest";
+                    inherit (final.${projectName}) src;
+                    nativeBuildInputs = [
+                      (final.mkVirtualEnv "${projectName}-pytest-env" {
+                        ${projectName} = [ "test" ];
+                      })
+                    ];
+                    dontConfigure = true;
+                    buildPhase = ''
+                      runHook preBuild
+                      pytest --cov tests --cov-report html tests
+                      runHook postBuild
+                    '';
+                    installPhase = ''
+                      mv htmlcov $out
+                    '';
+                  };
+                };
+              };
             });
-
           };
 
-        in
-        baseSet.overrideScope (
-            lib.composeManyExtensions [
-              pyproject-build-systems.overlays.default
-              overlay
-              pyprojectOverrides
-            ]
-          )
-        
+        in baseSet.overrideScope (
+          lib.composeManyExtensions [
+            pyproject-build-systems.overlays.default
+            overlay
+            pyprojectOverrides
+          ]
+        )
       );
 
-      # Static roots grouped per system
-      staticRoots = forAllSystems (
-        system:
+    in {
+      ### --- Checks (Run CI tests) ---
+      checks = forAllSystems (system:
+        pythonSets.${system}.${projectName}.passthru.tests
+      );
+
+      ### --- Dev Shells ---
+      devShells = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          inherit (pkgs) stdenv;
 
-          pythonSet = pythonSets.${system};
+          # Editable build (for use in dev shell)
+          editablePythonSet = pythonSets.${system}.overrideScope (
+            lib.composeManyExtensions [
+              editableOverlay
 
-          venv = pythonSet.mkVirtualEnv "${virtualEnvName}" workspace.deps.default;
+              # Override with editable build
+              (final: prev: {
+                ${projectName} = prev.${projectName}.overrideAttrs (old: {
+                  src = lib.fileset.toSource {
+                    root = old.src;
+                    fileset = lib.fileset.unions [
+                      (old.src + "/pyproject.toml")
+                      (old.src + "/README.md")
+                      # Add source folder for lint/test coverage
+                      (old.src + "/src/${packageName}/__init__.py")
+                      
+                      
+                    ];
+                  };
+                  nativeBuildInputs = old.nativeBuildInputs ++ final.resolveBuildSystem { editables = [ ]; };
+                });
+              })
+            ]
+          );
 
-        in
-        stdenv.mkDerivation {
-          name = "${Name}-static";
-          inherit (pythonSet.${Name}) src;
+          # Dev virtualenv with dev dependencies (linting, testing, etc.)
+          venv = editablePythonSet.mkVirtualEnv "${projectName}-dev-env" {
+            ${projectName} = [ "dev" ];
+          };
 
-          dontConfigure = true;
-          dontBuild = true;
-
-          nativeBuildInputs = [
-            venv
-          ];
-
-          installPhase = ''
-            mkdir -p $out
-            cp -r ${venv} $out/
-          '';
+        in {
+          default = pkgs.mkShell {
+            packages = [ venv pkgs.uv ];
+            env = {
+              UV_NO_SYNC = "1";
+              UV_PYTHON = "${venv}/bin/python";
+              UV_PYTHON_DOWNLOADS = "never";
+            };
+            shellHook = ''
+              unset PYTHONPATH
+              export REPO_ROOT=$(git rev-parse --show-toplevel)
+            '';
+          };
         }
       );
 
-      in
-      {
-        checks = forAllSystems (
-          system:
+      ### --- NixOS Module (for optional service deployment) ---
+      nixosModules = {
+        ${projectName} = { config, lib, pkgs, ... }:
           let
+            cfg = config.services.${projectName};
+            inherit (pkgs) system;
             pythonSet = pythonSets.${system};
-          in
-          # Inherit tests from passthru.tests into flake checks
-          pythonSet.${Name}.passthru.tests
-        );
-
-        nixosModules = {
-          ${Name} =
-            {
-              config,
-              lib,
-              pkgs,
-              ...
-            }:
-
-            let
-              cfg = config.services.${Name};
-              inherit (pkgs) system;
-
-              pythonSet = pythonSets.${system};
-
-              inherit (lib.options) mkOption;
-              inherit (lib.modules) mkIf;
-            in
-            {
-              options.services.${Name} = {
-                enable = mkOption {
-                  type = lib.types.bool;
-                  default = false;
-                  description = ''
-                    Enable "${Name}"
-                  '';
-                };
-
-                settings-module = mkOption {
-                  type = lib.types.string;
-                  default = settingsModules.prod;
-                  description = ''
-                    "${Name}" settings module
-                  '';
-                };
-
-                venv = mkOption {
-                  type = lib.types.package;
-                  default = pythonSet.mkVirtualEnv "${virtualEnvName}" workspace.deps.default;
-                  description = ''
-                   "${Name}" virtual environment package
-                  '';
-                };
-
-                static-root = mkOption {
-                  type = lib.types.package;
-                  default = staticRoots.${system};
-                  description = ''
-                    "${Name}" static root
-                  '';
-                };
+            inherit (lib.options) mkOption;
+            inherit (lib.modules) mkIf;
+          in {
+            options.services.${projectName} = {
+              enable = mkOption {
+                type = lib.types.bool;
+                default = false;
+                description = "Enable ${projectName} systemd service";
               };
 
-              config = mkIf cfg.enable {
-                systemd.services.${Name} = {
-                  description = "'${Name}' server";
-
-                  serviceConfig = {
-                    ExecStart = ''
-                      ${cfg.venv}/bin/python -m ${packageName}.hello
-                    '';
-                    Restart = "on-failure";
-
-                    DynamicUser = true;
-                    StateDirectory = "${Name}";
-                    RuntimeDirectory = "${Name}";
-
-                    BindReadOnlyPaths = [
-                      "${
-                        config.environment.etc."ssl/certs/ca-certificates.crt".source
-                      }:/etc/ssl/certs/ca-certificates.crt"
-                      builtins.storeDir
-                      "-/etc/resolv.conf"
-                      "-/etc/nsswitch.conf"
-                      "-/etc/hosts"
-                      "-/etc/localtime"
-                    ];
-                  };
-
-                  wantedBy = [ "multi-user.target" ];
-                };
+              exec-start = mkOption {
+                type = lib.types.str;
+                description = "Command to run the app (e.g., uvicorn main:app)";
               };
 
+              venv = mkOption {
+                type = lib.types.package;
+                default = pythonSet.mkVirtualEnv "${projectName}-env" workspace.deps.default;
+                description = "Virtual environment package to use";
+              };
             };
 
-        };
-
-        packages = forAllSystems (
-          system:
-          let
-            pkgs = nixpkgs.legacyPackages.${system};
-            pythonSet = pythonSets.${system};
-          in
-          lib.optionalAttrs pkgs.stdenv.isLinux {
-            # Expose Docker container in packages
-            docker =
-              let
-                venv = pythonSet.mkVirtualEnv "${virtualEnvName}" workspace.deps.default;
-              in
-              pkgs.dockerTools.buildLayeredImage {
-                name = "${Name}";
-                contents = [];
-                config = {
-                  Cmd = [
-                    "sh" "-c" ''
-                      source ${venv}/bin/activate
-                      ${StartApp}
-                      echo "Container: ${Name} Started"
-                    ''
-                  ];
-                  Env = [
-                  
-                  ];
+            config = mkIf cfg.enable {
+              systemd.services.${projectName} = {
+                description = "Python web app";
+                serviceConfig = {
+                  ExecStart = cfg.exec-start;
+                  Restart = "on-failure";
+                  DynamicUser = true;
+                  StateDirectory = "${projectName}";
+                  RuntimeDirectory = "${projectName}";
                 };
+                wantedBy = [ "multi-user.target" ];
               };
-          }
-        );
-
-        # Use an editable Python set for development.
-        devShells = forAllSystems (
-          system:
-          let
-            pkgs = nixpkgs.legacyPackages.${system};
-
-            editablePythonSet = pythonSets.${system}.overrideScope (
-              lib.composeManyExtensions [
-                editableOverlay
-
-                (final: prev: {
-                  ${Name} = prev.${Name}.overrideAttrs (old: {
-                    src = lib.fileset.toSource {
-                      root = old.src;
-                      fileset = lib.fileset.unions [
-                        (old.src + "/pyproject.toml")
-                        (old.src + "/README.md")
-                        (old.src + "/src/${packageName}/__init__.py")
-                      ];
-                    };
-                    nativeBuildInputs =
-                      old.nativeBuildInputs
-                      ++ final.resolveBuildSystem {
-                        editables = [ ];
-                      };
-                  });
-                })
-              ]
-            );
-
-            venv = editablePythonSet.mkVirtualEnv "${editableEnvName}" {
-              ${Name} = [ "dev" ];
             };
-          in
-          {
-            default = pkgs.mkShell {
-              packages = [
-                venv
-                pkgs.uv
-              ];
-              env = {
-                UV_NO_SYNC = "1";
-                UV_PYTHON = "${venv}/bin/python";
-                UV_PYTHON_DOWNLOADS = "never";
-              };
-              shellHook = ''
-                unset PYTHONPATH
-                export REPO_ROOT=$(git rev-parse --show-toplevel)
-                echo "Dev Shell Started: ${editableEnvName}"
-                echo "Python Version: ${pythonVersion}"
-                echo "Package Name: ${packageName}"
-                echo "REPO_ROOT: $REPO_ROOT"
-              '';
-            };
-          }
-        );
+          };
       };
+
+      ### --- Docker Image (optional container build) ---
+      packages = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          pythonSet = pythonSets.${system};
+          venv = pythonSet.mkVirtualEnv "${projectName}-env" workspace.deps.default;
+        in
+        lib.optionalAttrs pkgs.stdenv.isLinux {
+          docker = pkgs.dockerTools.buildLayeredImage {
+            name = "${projectName}";
+            tag = "latest";
+            contents = [ pkgs.cacert ];
+            config = {
+              Cmd = [
+                "${venv}/bin/python"
+                "-m"
+                "${packageName}:hello"
+];
+            };
+          };
+        }
+      );
+    };
 }
-   
-   

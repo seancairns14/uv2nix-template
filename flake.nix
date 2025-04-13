@@ -40,8 +40,8 @@
       forAllSystems = lib.genAttrs lib.systems.flakeExposed;
 
       # Change this to match your project name (used throughout the flake)
-      projectName = "project-name";
-      packageName = "package-name";
+      projectName = "comfyui-scripting";
+      packageName = "comfyui_scripting";
 
       # Load project dependency graph and metadata using uv2nix
       workspace = uv2nix.lib.workspace.loadWorkspace {
@@ -241,7 +241,7 @@
               Cmd = [
                 "${venv}/bin/python"
                 "-m"
-                "${packageName}:hello"
+                "${packageName}"
 ];
             };
           };

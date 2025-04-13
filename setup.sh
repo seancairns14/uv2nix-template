@@ -29,8 +29,8 @@ mkdir -p "src/$packageName"
 # Create the __init__.py file in the newly created package directory, 
 # and define a simple 'hello' function that prints a message
 cat > "src/$packageName/__init__.py" <<EOF
-def hello() -> None:
-    print("Hello from packageName!")
+__version__ = "0.1.0"
+
 EOF
 
 # Create the pyproject.toml file, which includes the project metadata,
@@ -57,6 +57,15 @@ build-backend = "hatchling.build"  # Backend for building the package
 dev = [
     "ruff>=0.6.7",  # Development dependency for ruff (linter)
 ]
+EOF
+
+cat > "src/$packageName/__main__.py" <<EOF
+def main():
+    print("Hello World!")
+
+if __name__ == "__main__":
+    main()
+
 EOF
 
 # Run 'nix run' command to lock dependencies in nixpkgs (for reproducible builds)

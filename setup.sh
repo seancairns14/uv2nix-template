@@ -73,7 +73,7 @@ nix run nixpkgs#uv lock
 
 # Add the necessary files to Git: the Nix flake file, the lock file, README, pyproject.toml, 
 # and the created Python package __init__.py
-git add flake.nix uv.lock README.md pyproject.toml src/$packageName/__init__.py
+git add flake.nix uv.lock README.md pyproject.toml src/$packageName/__init__.py src/$packageName/__main__.py
 
 # Output a success message with the project name and Python version
 echo "Project setup complete for package '$packageName' with Python '$pythonVersion'."

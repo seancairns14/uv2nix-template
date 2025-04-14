@@ -39,9 +39,11 @@
       inherit (nixpkgs) lib;
       forAllSystems = lib.genAttrs lib.systems.flakeExposed;
 
-      # Change this to match your project name (used throughout the flake)
-      projectName = "comfyui-scripting";
-      packageName = "comfyui_scripting";
+      # Automatically detect project name and normalized package name
+      # Replace if needed 
+      dirName = builtins.baseNameOf (toString ./.);
+      projectName = dirName;
+      packageName = lib.replaceStrings [ "-" ] [ "_" ] dirName;
 
       # Load project dependency graph and metadata using uv2nix
       workspace = uv2nix.lib.workspace.loadWorkspace {

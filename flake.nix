@@ -26,15 +26,11 @@
       inputs.uv2nix.follows = "uv2nix";
       inputs.pyproject-nix.follows = "pyproject-nix";
     };
-    # Arion for managing Docker/Podman services
-    arion = {
-      url = "github:hercules-ci/hercules-ci-agent/stable";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    
   };
 
   ### --- Outputs (Main Build Logic) ---
-  outputs = { self, nixpkgs, uv2nix, pyproject-nix, pyproject-build-systems, arion, ... }:
+  outputs = { self, nixpkgs, uv2nix, pyproject-nix, pyproject-build-systems, ... }:
     let
       inherit (nixpkgs) lib;
       forAllSystems = lib.genAttrs lib.systems.flakeExposed;
@@ -168,7 +164,7 @@
 
         in {
           default = pkgs.mkShell {
-            packages = [ venv pkgs.uv ];
+            packages = [ venv pkgs.uv pkgs.vscode ];
             env = {
               UV_NO_SYNC = "1";
               UV_PYTHON = "${venv}/bin/python";

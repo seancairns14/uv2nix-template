@@ -41,9 +41,8 @@
 
       # Automatically detect project name and normalized package name
       # Replace if needed 
-      dirName = builtins.baseNameOf (toString ./.);
-      projectName = dirName;
-      packageName = lib.replaceStrings [ "-" ] [ "_" ] dirName;
+      projectName = "comfy-scripting";
+      packageName = "comfy_scripting";
 
       # Load project dependency graph and metadata using uv2nix
       workspace = uv2nix.lib.workspace.loadWorkspace {

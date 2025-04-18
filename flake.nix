@@ -150,6 +150,7 @@
                       (old.src + "/README.md")
                       # Add source folder for lint/test coverage
                       (old.src + "/src/${packageName}/__init__.py")
+                      (old.src + "/src/${packageName}/__main__.py")
                       
                       
                     ];

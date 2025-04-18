@@ -46,8 +46,6 @@ dependencies = [
     "urllib3>=2.2.3",  # Default dependency (urllib3)
 ]
 
-[project.scripts]
-hello = "$packageName:hello"  # Define a script named 'hello' that calls the hello function
 
 [build-system]
 requires = ["hatchling"]  # Use hatchling as the build system
@@ -73,7 +71,6 @@ nix run nixpkgs#uv lock
 
 # Add the necessary files to Git: the Nix flake file, the lock file, README, pyproject.toml, 
 # and the created Python package __init__.py
-git add flake.nix uv.lock README.md pyproject.toml src/$packageName/__init__.py src/$packageName/__main__.py
-
+git add .
 # Output a success message with the project name and Python version
 echo "Project setup complete for package '$packageName' with Python '$pythonVersion'."

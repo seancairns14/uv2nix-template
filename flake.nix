@@ -244,7 +244,7 @@
                 "${venv}/bin/python"
                 "-m"
                 "${packageName}"
-];
+              ];
             };
           };
         }

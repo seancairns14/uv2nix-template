@@ -164,7 +164,7 @@
 
         in {
           default = pkgs.mkShell {
-            packages = [ venv pkgs.uv pkgs.vscode ];
+            packages = [ venv pkgs.uv ];
             env = {
               UV_NO_SYNC = "1";
               UV_PYTHON = "${venv}/bin/python";
@@ -223,27 +223,10 @@
           };
       };
 
-      ### --- Docker Image (optional container build) ---
-      packages = forAllSystems (system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-          pythonSet = pythonSets.${system};
-          venv = pythonSet.mkVirtualEnv "${projectName}-env" workspace.deps.default;
-        in
-        lib.optionalAttrs pkgs.stdenv.isLinux {
-          docker = pkgs.dockerTools.buildLayeredImage {
-            name = "${projectName}";
-            tag = "latest";
-            contents = [ pkgs.cacert ];
-            config = {
-              Cmd = [
-                "${venv}/bin/python"
-                "-m"
-                "${packageName}"
-              ];
-            };
-          };
-        }
-      );
+      ### --- Expose buildable derivation ---
+      packages = forAllSystems (system: {
+        ${projectName} = pythonSets.${system}.${projectName};
+        default = pythonSets.${system}.${projectName};
+      });
     };
 }

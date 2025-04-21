@@ -66,6 +66,43 @@ if __name__ == "__main__":
 
 EOF
 
+cat > "arion-compose.nix" <<EOF
+{ pkgs, ... }:
+let 
+  flake = builtins.getFlake (toString ./.);
+  package = flake.packages.x86_64-linux.default;
+in {
+  project.name = "devshell";
+  services = {
+    devshell = {
+      image.enableRecommendedContents = true;
+      image.contents = [
+        package
+        pkgs.bashInteractive
+        pkgs.coreutils
+        pkgs.git
+        pkgs.python312
+      ];
+      service.useHostStore = true;
+      service.ports = [
+        # optionally expose any dev-related ports
+      ];
+      service.stop_signal = "SIGINT";
+      service.tty = true;
+    };
+  };
+}
+EOF
+
+cat > "arion-pkgs.nix" <<EOF
+# Instead of pinning Nixpkgs, we can opt to use the one in NIX_PATH
+import <nixpkgs> {
+  # We specify the architecture explicitly. Use a Linux remote builder when
+  # calling arion from other platforms.
+  system = "x86_64-linux";
+}
+EOF
+
 # Run 'nix run' command to lock dependencies in nixpkgs (for reproducible builds)
 nix run nixpkgs#uv lock
 
